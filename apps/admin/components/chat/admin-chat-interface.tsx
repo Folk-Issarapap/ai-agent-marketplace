@@ -2,7 +2,11 @@
 
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { useAgent } from "agents/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithToolCalls,
+  type UIMessage,
+} from "ai";
 import { useChat } from "@ai-sdk/react";
 import {
   MessageSquare,
@@ -18,11 +22,15 @@ import {
   Copy,
   RotateCw,
   ChevronsUpDown,
+  ChevronDown,
   Settings2,
   Loader2,
   ImageIcon,
   Music2Icon,
   AlertCircle,
+  Lightbulb,
+  Mic,
+  Square,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -638,6 +646,15 @@ export function AdminChatInterface({
   } | null>(null);
   const [renameInput, setRenameInput] = useState("");
   const [dismissedChatError, setDismissedChatError] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(true);
+  const [draftText, setDraftText] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<{
+    start: () => void;
+    stop: () => void;
+    onresult: ((event: unknown) => void) | null;
+    onend: (() => void) | null;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -746,6 +763,7 @@ export function AdminChatInterface({
         ? `/api/agents/${selectedAgentId}/chat`
         : "/api/agents/unknown/chat",
     }),
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
   });
 
   const messages = (isProxyMode ? proxyMessages : agentMessages) as UIMessage[];
@@ -1040,7 +1058,7 @@ export function AdminChatInterface({
       filename?: string;
     }>;
   }) => {
-    const text = payload.text?.trim() ?? "";
+    const text = (payload.text ?? draftText).trim();
     const files = payload.files ?? [];
     const hasContent = text.length > 0 || files.length > 0;
     if (!hasContent || (!isProxyMode && !agent.host) || status !== "ready")
@@ -1065,10 +1083,175 @@ export function AdminChatInterface({
     sendMessage({ role: "user", parts } as unknown as Parameters<
       typeof sendMessage
     >[0]);
+    setDraftText("");
   };
+  const handleToggleListening = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const w = window as typeof window & {
+      SpeechRecognition?: new () => {
+        lang: string;
+        interimResults: boolean;
+        maxAlternatives: number;
+        start: () => void;
+        stop: () => void;
+        onresult: ((event: unknown) => void) | null;
+        onend: (() => void) | null;
+      };
+      webkitSpeechRecognition?: new () => {
+        lang: string;
+        interimResults: boolean;
+        maxAlternatives: number;
+        start: () => void;
+        stop: () => void;
+        onresult: ((event: unknown) => void) | null;
+        onend: (() => void) | null;
+      };
+    };
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognitionCtor =
+      w.SpeechRecognition ?? w.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) return;
+
+    if (!recognitionRef.current) {
+      const recognition = new SpeechRecognitionCtor();
+      recognition.lang = "th-TH";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.onresult = (event: unknown) => {
+        const transcript = (
+          event as {
+            results?: ArrayLike<ArrayLike<{ transcript?: string }>>;
+          }
+        ).results?.[0]?.[0]?.transcript;
+        if (!transcript) return;
+        setDraftText((prev) =>
+          prev.trim().length > 0
+            ? `${prev.trim()} ${transcript.trim()}`
+            : transcript.trim(),
+        );
+      };
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+      recognitionRef.current = recognition;
+    }
+
+    setIsListening(true);
+    recognitionRef.current.start();
+  }, [isListening]);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+    };
+  }, []);
+  const handleSuggestionClick = useCallback(
+    (suggestion: string) => {
+      if (!suggestion.trim() || status !== "ready") return;
+      setDismissedChatError(false);
+      sendMessage({
+        role: "user",
+        parts: [{ type: "text", text: suggestion }],
+      } as unknown as Parameters<typeof sendMessage>[0]);
+    },
+    [status, sendMessage],
+  );
 
   const isLoading = status === "submitted" || status === "streaming";
   const canSend = status === "ready" && (isProxyMode || !!agent.host);
+  const guideContent = useMemo(() => {
+    switch (selectedAgentId) {
+      case "weather":
+        return {
+          tips: [
+            "ระบุเมือง/ประเทศให้ชัดเจน",
+            "บอกช่วงเวลา เช่น วันนี้ พรุ่งนี้ หรือสุดสัปดาห์",
+            "ถ้าต้องการแผนเดินทาง ให้บอกกิจกรรมและช่วงเวลา",
+          ],
+          suggestions: [
+            "What's the weather in Bangkok today?",
+            "Weather forecast for Chiang Mai this week",
+            "Is it going to rain in Phuket tomorrow?",
+            "Temperature and humidity in Singapore",
+            "Compare weather: Bangkok vs Tokyo",
+          ],
+        };
+      case "travel":
+        return {
+          tips: [
+            "ระบุงบประมาณและจำนวนวัน",
+            "บอกสไตล์ทริป เช่น ชิล ธรรมชาติ หรือครอบครัว",
+            "เพิ่มข้อจำกัด เช่น เดินทางกับเด็กหรือผู้สูงอายุ",
+          ],
+          suggestions: [
+            "วางแผนเที่ยวเชียงใหม่ 3 วัน งบ 12,000 บาท",
+            "ทริปโตเกียว 5 วัน สำหรับครอบครัว",
+            "แนะนำเมืองทะเลใกล้กรุงเทพ 2 วัน 1 คืน",
+            "แพลนเที่ยวโอซาก้าแบบประหยัด",
+          ],
+        };
+      case "fitness":
+        return {
+          tips: [
+            "บอกเป้าหมาย เช่น ลดไขมัน เพิ่มกล้าม หรือรักษาน้ำหนัก",
+            "ใส่ข้อมูลพื้นฐาน (เพศ อายุ ส่วนสูง น้ำหนัก)",
+            "แจ้งข้อจำกัดสุขภาพหรืออุปกรณ์ที่มี",
+          ],
+          suggestions: [
+            "ช่วยทำโปรแกรมลดไขมัน 4 วัน/สัปดาห์",
+            "เมนูอาหาร 1 วัน โปรตีนสูง งบประหยัด",
+            "ตารางเวทสำหรับมือใหม่ที่บ้าน",
+            "คำนวณแคลอรีสำหรับเป้าหมายลดน้ำหนัก",
+          ],
+        };
+      case "finance":
+        return {
+          tips: [
+            "ระบุรายรับ-รายจ่ายต่อเดือน",
+            "บอกเป้าหมายและระยะเวลา เช่น เก็บเงิน 6 เดือน",
+            "แยกค่าใช้จ่ายคงที่กับค่าใช้จ่ายผันแปร",
+          ],
+          suggestions: [
+            "ช่วยจัดงบรายเดือนจากเงินเดือน 35,000 บาท",
+            "แผนออมเงินฉุกเฉินให้ครบ 100,000 บาท",
+            "ลดค่าใช้จ่ายประจำแบบไม่กระทบคุณภาพชีวิต",
+            "วิเคราะห์รายจ่ายและจุดที่ควรปรับ",
+          ],
+        };
+      case "study":
+        return {
+          tips: [
+            "ระบุวิชาหรือหัวข้อที่ต้องการเรียน",
+            "บอกเวลาที่มีต่อวันและเดดไลน์",
+            "แจ้งรูปแบบที่ชอบ เช่น สรุปสั้น แบบฝึกหัด หรือ quiz",
+          ],
+          suggestions: [
+            "ช่วยวางแผนอ่านสอบคณิต 14 วัน",
+            "สรุป React hooks ให้เข้าใจใน 10 นาที",
+            "ออก quiz ภาษาอังกฤษ 10 ข้อพร้อมเฉลย",
+            "เทคนิคจำเนื้อหาเร็วขึ้นก่อนสอบ",
+          ],
+        };
+      default:
+        return {
+          tips: [
+            "ระบุเป้าหมายให้ชัดเจนและมีบริบท",
+            "บอกข้อจำกัด เช่น งบ เวลา หรือรูปแบบคำตอบที่ต้องการ",
+            "ถ้าต้องการผลลัพธ์เฉพาะ ให้ยกตัวอย่างข้อมูลประกอบ",
+          ],
+          suggestions: [
+            "ช่วยสรุปแผนงานวันนี้แบบสั้น",
+            "ช่วยเขียน checklist สำหรับงานนี้",
+            "แนะนำขั้นตอนแก้ปัญหาแบบทีละข้อ",
+          ],
+        };
+    }
+  }, [selectedAgentId]);
 
   const filteredConversations = conversations.filter((c) => {
     if (!searchQuery.trim()) return true;
@@ -1426,6 +1609,7 @@ export function AdminChatInterface({
                         input?: unknown;
                         output?: unknown;
                         errorText?: string;
+                        approval?: { id?: string };
                       };
                       const toolState = toolPart.state as
                         | "approval-requested"
@@ -1501,6 +1685,9 @@ export function AdminChatInterface({
                           );
                         }
                         if (toolPart.state === "approval-requested") {
+                          const approvalId =
+                            toolPart.approval?.id ?? toolPart.toolCallId;
+                          if (!approvalId) return null;
                           return (
                             <div
                               key={`${message.id}-${i}`}
@@ -1514,7 +1701,7 @@ export function AdminChatInterface({
                                 <ToolContent>
                                   <Confirmation
                                     approval={{
-                                      id: toolPart.toolCallId,
+                                      id: approvalId,
                                     }}
                                     state={toolState}
                                   >
@@ -1526,7 +1713,7 @@ export function AdminChatInterface({
                                         <ConfirmationAction
                                           onClick={() =>
                                             addToolOutput({
-                                              toolCallId: toolPart.toolCallId,
+                                              toolCallId: approvalId,
                                               output: { approved: true },
                                             })
                                           }
@@ -1537,7 +1724,7 @@ export function AdminChatInterface({
                                           variant="outline"
                                           onClick={() =>
                                             addToolOutput({
-                                              toolCallId: toolPart.toolCallId,
+                                              toolCallId: approvalId,
                                               output: { approved: false },
                                             })
                                           }
@@ -1611,6 +1798,9 @@ export function AdminChatInterface({
                           );
                         }
                         if (toolPart.state === "approval-requested") {
+                          const approvalId =
+                            toolPart.approval?.id ?? toolPart.toolCallId;
+                          if (!approvalId) return null;
                           return (
                             <div
                               key={`${message.id}-${i}`}
@@ -1624,7 +1814,7 @@ export function AdminChatInterface({
                                 <ToolContent>
                                   <Confirmation
                                     approval={{
-                                      id: toolPart.toolCallId,
+                                      id: approvalId,
                                     }}
                                     state={toolState}
                                   >
@@ -1636,7 +1826,7 @@ export function AdminChatInterface({
                                         <ConfirmationAction
                                           onClick={() =>
                                             addToolOutput({
-                                              toolCallId: toolPart.toolCallId,
+                                              toolCallId: approvalId,
                                               output: { approved: true },
                                             })
                                           }
@@ -1647,7 +1837,7 @@ export function AdminChatInterface({
                                           variant="outline"
                                           onClick={() =>
                                             addToolOutput({
-                                              toolCallId: toolPart.toolCallId,
+                                              toolCallId: approvalId,
                                               output: { approved: false },
                                             })
                                           }
@@ -1678,9 +1868,15 @@ export function AdminChatInterface({
                             />
                             <ToolContent>
                               {toolPart.state === "approval-requested" && (
+                                (() => {
+                                  const approvalId =
+                                    toolPart.approval?.id ??
+                                    toolPart.toolCallId;
+                                  if (!approvalId) return null;
+                                  return (
                                 <Confirmation
                                   approval={{
-                                    id: toolPart.toolCallId,
+                                    id: approvalId,
                                   }}
                                   state={toolState}
                                 >
@@ -1692,7 +1888,7 @@ export function AdminChatInterface({
                                       <ConfirmationAction
                                         onClick={() =>
                                           addToolOutput({
-                                            toolCallId: toolPart.toolCallId,
+                                            toolCallId: approvalId,
                                             output: { approved: true },
                                           })
                                         }
@@ -1703,7 +1899,7 @@ export function AdminChatInterface({
                                         variant="outline"
                                         onClick={() =>
                                           addToolOutput({
-                                            toolCallId: toolPart.toolCallId,
+                                            toolCallId: approvalId,
                                             output: { approved: false },
                                           })
                                         }
@@ -1713,6 +1909,8 @@ export function AdminChatInterface({
                                     </ConfirmationActions>
                                   </ConfirmationRequest>
                                 </Confirmation>
+                                  );
+                                })()
                               )}
                               {toolPart.input != null && (
                                 <ToolInput input={toolPart.input} />
@@ -1935,6 +2133,45 @@ export function AdminChatInterface({
             </AlertDescription>
           </Alert>
         )}
+        <div className="mb-3 rounded-lg border bg-muted/20 p-2">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/50"
+            onClick={() => setGuideOpen((prev) => !prev)}
+            aria-expanded={guideOpen}
+          >
+            <Lightbulb className="size-4 text-amber-500" />
+            <span className="font-medium text-foreground">Tips for best results</span>
+            <ChevronDown
+              className={cn(
+                "ml-auto size-4 transition-transform",
+                guideOpen && "rotate-180",
+              )}
+            />
+          </button>
+          {guideOpen && (
+            <ul className="mt-2 list-inside list-disc space-y-1 px-2 text-sm text-muted-foreground">
+              {guideContent.tips.map((tip) => (
+                <li key={tip}>{tip}</li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2 px-1 pb-1">
+            {guideContent.suggestions.map((suggestion) => (
+              <Button
+                key={suggestion}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 rounded-full text-xs"
+                disabled={!canSend}
+                onClick={() => handleSuggestionClick(suggestion)}
+              >
+                {suggestion}
+              </Button>
+            ))}
+          </div>
+        </div>
         <PromptInput
           className="rounded-2xl"
           onSubmit={(payload) => {
@@ -1949,6 +2186,8 @@ export function AdminChatInterface({
           <PromptInputTextarea
             className="min-h-20 px-4 py-3 text-base"
             placeholder="Type a question or task... (⌘↵ to send)"
+            value={draftText}
+            onChange={(e) => setDraftText(e.target.value)}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                 e.preventDefault();
@@ -2027,6 +2266,22 @@ export function AdminChatInterface({
                   )}
                 </ModelSelectorContent>
               </ModelSelector>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-9"
+                onClick={handleToggleListening}
+                title={
+                  isListening ? "หยุดบันทึกเสียง" : "เริ่มพิมพ์ด้วยเสียง"
+                }
+              >
+                {isListening ? (
+                  <Square className="size-4 text-red-500" />
+                ) : (
+                  <Mic className="size-4" />
+                )}
+              </Button>
             </PromptInputTools>
             <PromptInputSubmit
               disabled={!canSend}
