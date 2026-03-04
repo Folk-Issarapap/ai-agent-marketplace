@@ -14,7 +14,6 @@ import {
   LogOut,
   BrainCircuit,
   Bot,
-  MessageSquare,
   Sparkles,
 } from 'lucide-react';
 import {
@@ -50,7 +49,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 export function AppSidebar({ userEmail, ...props }: AppSidebarProps) {
   const lang = useLocale() as string;
   const pathname = usePathname();
-  const isChatActive = pathname === `/${lang}/chat`;
+  const isChatUnifiedActive = pathname === `/${lang}/chat-unified`;
 
   const topNavItems: NavItem[] = [
     { title: 'Dashboard', href: `/${lang}`, icon: LayoutDashboard },
@@ -93,27 +92,26 @@ export function AppSidebar({ userEmail, ...props }: AppSidebarProps) {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={isChatActive}
+                  isActive={isChatUnifiedActive}
                   className={cn(
-                    isChatActive &&
+                    isChatUnifiedActive &&
                       'bg-primary/10 text-primary dark:bg-primary/15',
                   )}
                 >
                   <Link
-                    href={`/${lang}/chat`}
+                    href={`/${lang}/chat-unified`}
                     className="group flex items-center gap-2"
                   >
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 text-primary transition-colors group-hover:from-primary/30 group-hover:to-primary/10">
-                      <MessageSquare className="h-4 w-4" />
+                      <Sparkles className="h-4 w-4" />
                     </div>
                     <span className="flex-1 font-medium">
-                      Platform Assistant
+                      Admin Assistant
                     </span>
                     <Badge
                       variant="outline"
                       className="shrink-0 border-primary/30 bg-primary/5 px-1.5 py-0 text-[10px] font-medium text-primary"
                     >
-                      <Sparkles className="mr-0.5 h-2.5 w-2.5" />
                       AI
                     </Badge>
                   </Link>

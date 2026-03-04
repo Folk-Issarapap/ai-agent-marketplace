@@ -10,14 +10,11 @@ export const keys = () =>
     client: {
       NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: z.string().min(1),
-      /** Cloudflare Chat Agent host URL (e.g. https://xxx.workers.dev/agents/chat-agent) */
-      NEXT_PUBLIC_CHAT_AGENT_HOST: z.string().url().optional(),
     },
     runtimeEnv: {
       NODE_ENV: process.env.NODE_ENV,
       SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
       NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY,
-      NEXT_PUBLIC_CHAT_AGENT_HOST: process.env.NEXT_PUBLIC_CHAT_AGENT_HOST,
     },
   });

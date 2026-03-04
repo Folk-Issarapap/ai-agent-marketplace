@@ -2,7 +2,8 @@
 
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { useAgent } from "agents/react";
-import type { UIMessage } from "ai";
+import { DefaultChatTransport, type UIMessage } from "ai";
+import { useChat } from "@ai-sdk/react";
 import {
   MessageSquare,
   History,
@@ -315,10 +316,7 @@ function getAudioUrlFromToolOutput(output: unknown): string | null {
   };
 
   /** Convert base64 to data URL for audio */
-  const tryBase64 = (
-    v: unknown,
-    mime = "audio/mpeg"
-  ): string | null => {
+  const tryBase64 = (v: unknown, mime = "audio/mpeg"): string | null => {
     if (typeof v !== "string" || !v.trim()) return null;
     const b64 = v.trim();
     if (/^[A-Za-z0-9+/=]+$/.test(b64)) return `data:${mime};base64,${b64}`;
@@ -367,11 +365,11 @@ function getAudioUrlFromToolOutput(output: unknown): string | null {
     if (obj && typeof obj === "object" && !Array.isArray(obj)) {
       const rec = obj as Record<string, unknown>;
       const u = tryUrl(
-        rec.url ?? rec.audioUrl ?? rec.audio_url ?? rec.audio ?? rec.src
+        rec.url ?? rec.audioUrl ?? rec.audio_url ?? rec.audio ?? rec.src,
       );
       if (u) return u;
       const dataUrl = tryBase64(
-        rec.audioBase64 ?? rec.audio_base64 ?? rec.base64 ?? rec.content
+        rec.audioBase64 ?? rec.audio_base64 ?? rec.base64 ?? rec.content,
       );
       if (dataUrl) return dataUrl;
     }
@@ -487,12 +485,7 @@ function GeneratedAudioCard({ audioUrl }: { audioUrl: string }) {
 
   return (
     <div className="mt-2 overflow-hidden rounded-lg border bg-muted/30">
-      <audio
-        className="w-full"
-        controls
-        preload="metadata"
-        src={audioUrl}
-      />
+      <audio className="w-full" controls preload="metadata" src={audioUrl} />
       <div className="flex items-center justify-end gap-1 border-t bg-muted/20 px-2 py-1.5">
         <Button
           type="button"
@@ -515,7 +508,11 @@ function looksTruncated(text: string): boolean {
   if (t.length < 250) return false;
   // Ends with sentence-ending punctuation → unlikely to be truncated
   if (/[.!?。？！\n]$/.test(t)) return false;
-  if (["์", "ๆ", "ฯ", ",", ")", "]", '"', "'", ":", ";", "…"].includes(t.slice(-1)))
+  if (
+    ["์", "ๆ", "ฯ", ",", ")", "]", '"', "'", ":", ";", "…"].includes(
+      t.slice(-1),
+    )
+  )
     return false;
   if (t.endsWith("ฯลฯ") || t.endsWith("...")) return false;
   const lastFew = t.slice(-6);
@@ -610,6 +607,7 @@ interface AdminChatInterfaceProps {
   lang: string;
   selectedAgentId: string;
   chatAgents: ChatAgentItem[];
+  transportMode?: "agent" | "proxy";
   onAgentChange?: (agentId: string) => void;
   manageSheetOpen?: boolean;
   onManageSheetOpenChange?: (open: boolean) => void;
@@ -619,11 +617,13 @@ export function AdminChatInterface({
   lang: _lang,
   selectedAgentId,
   chatAgents,
+  transportMode = "agent",
   onAgentChange,
   manageSheetOpen = false,
   onManageSheetOpenChange,
 }: AdminChatInterfaceProps) {
   const selectedAgent = chatAgents.find((a) => a.id === selectedAgentId);
+  const isProxyMode = transportMode === "proxy";
 
   const [conversations, setConversations] = useState<StoredConversation[]>([]);
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
@@ -637,6 +637,7 @@ export function AdminChatInterface({
     title: string;
   } | null>(null);
   const [renameInput, setRenameInput] = useState("");
+  const [dismissedChatError, setDismissedChatError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -668,13 +669,7 @@ export function AdminChatInterface({
       const convs = res.success && res.data ? res.data : [];
       const conv = last ? convs.find((c) => c.id === last) : undefined;
       const sameAgent = conv?.agentId === selectedAgentId;
-      if (
-        !isNewChatRequested &&
-        isRefresh &&
-        last &&
-        conv &&
-        sameAgent
-      ) {
+      if (!isNewChatRequested && isRefresh && last && conv && sameAgent) {
         setCurrentConvId(last);
       }
       setIsHydrated(true);
@@ -694,44 +689,110 @@ export function AdminChatInterface({
 
   const messagesRef = useRef<UIMessage[]>([]);
 
-  const { messages, sendMessage, status, setMessages, addToolOutput } =
-    useAgentChat({
-      agent,
-      body: () => ({}),
-      // Always [] for SSR/hydration — restore in useEffect to avoid server/client mismatch
-      getInitialMessages: async () => [],
-      // Fitness Coach: when getUserProfile is called, send data parsed from user message
-      onToolCall:
-        selectedAgentId === "fitness-coach"
-          ? async (event) => {
-              if (
-                "addToolOutput" in event &&
-                event.toolCall?.toolName === "getUserProfile"
-              ) {
-                const msgs = messagesRef.current;
-                const lastUserMsg = [...msgs]
-                  .reverse()
-                  .find((m: UIMessage) => m.role === "user");
-                const userText = lastUserMsg
-                  ? getFullTextFromMessage(lastUserMsg)
-                  : "";
-                const parsed = parseFitnessProfileFromMessage(userText);
-                event.addToolOutput?.({
-                  toolCallId: event.toolCall.toolCallId,
-                  output: {
-                    found: userText.length > 0,
-                    profile: userText.length > 0 ? parsed : undefined,
-                    extracted_from_message: userText.length > 0,
-                    message:
-                      userText.length > 0
-                        ? "ใช้ข้อมูลจากข้อความผู้ใช้ (วิธีที่ 2)"
-                        : "ยังไม่มีข้อความจากผู้ใช้",
-                  },
-                });
-              }
+  const {
+    messages: agentMessages,
+    sendMessage: agentSendMessage,
+    status: agentStatus,
+    setMessages: setAgentMessages,
+    addToolOutput: addAgentToolOutput,
+  } = useAgentChat({
+    agent,
+    body: () => ({}),
+    // Always [] for SSR/hydration — restore in useEffect to avoid server/client mismatch
+    getInitialMessages: async () => [],
+    // Fitness Coach: when getUserProfile is called, send data parsed from user message
+    onToolCall:
+      selectedAgentId === "fitness-coach"
+        ? async (event) => {
+            if (
+              "addToolOutput" in event &&
+              event.toolCall?.toolName === "getUserProfile"
+            ) {
+              const msgs = messagesRef.current;
+              const lastUserMsg = [...msgs]
+                .reverse()
+                .find((m: UIMessage) => m.role === "user");
+              const userText = lastUserMsg
+                ? getFullTextFromMessage(lastUserMsg)
+                : "";
+              const parsed = parseFitnessProfileFromMessage(userText);
+              event.addToolOutput?.({
+                toolCallId: event.toolCall.toolCallId,
+                output: {
+                  found: userText.length > 0,
+                  profile: userText.length > 0 ? parsed : undefined,
+                  extracted_from_message: userText.length > 0,
+                  message:
+                    userText.length > 0
+                      ? "ใช้ข้อมูลจากข้อความผู้ใช้ (วิธีที่ 2)"
+                      : "ยังไม่มีข้อความจากผู้ใช้",
+                },
+              });
             }
-          : undefined,
-    });
+          }
+        : undefined,
+  });
+
+  const {
+    messages: proxyMessages,
+    sendMessage: proxySendMessage,
+    status: proxyStatus,
+    error: proxyError,
+    setMessages: setProxyMessages,
+    addToolApprovalResponse,
+  } = useChat({
+    transport: new DefaultChatTransport({
+      api: selectedAgentId
+        ? `/api/agents/${selectedAgentId}/chat`
+        : "/api/agents/unknown/chat",
+    }),
+  });
+
+  const messages = (isProxyMode ? proxyMessages : agentMessages) as UIMessage[];
+  const status = (isProxyMode ? proxyStatus : agentStatus) as
+    | "ready"
+    | "submitted"
+    | "streaming"
+    | "error";
+  const setMessages = useCallback(
+    (nextMessages: UIMessage[]) => {
+      if (isProxyMode) {
+        setProxyMessages(nextMessages as never[]);
+        return;
+      }
+      setAgentMessages(nextMessages as typeof agentMessages);
+    },
+    [isProxyMode, setProxyMessages, setAgentMessages, agentMessages],
+  );
+  const sendMessage = useCallback(
+    (payload: unknown) => {
+      if (isProxyMode) {
+        proxySendMessage(payload as Parameters<typeof proxySendMessage>[0]);
+        return;
+      }
+      agentSendMessage(payload as Parameters<typeof agentSendMessage>[0]);
+    },
+    [isProxyMode, proxySendMessage, agentSendMessage],
+  );
+  const addToolOutput = useCallback(
+    (payload: { toolCallId: string; output: unknown }) => {
+      if (isProxyMode) {
+        const approved =
+          typeof payload.output === "object" &&
+          payload.output !== null &&
+          "approved" in (payload.output as Record<string, unknown>) &&
+          (payload.output as Record<string, unknown>).approved === true;
+        addToolApprovalResponse({
+          id: payload.toolCallId,
+          approved,
+        });
+        return;
+      }
+
+      addAgentToolOutput(payload as Parameters<typeof addAgentToolOutput>[0]);
+    },
+    [isProxyMode, addToolApprovalResponse, addAgentToolOutput],
+  );
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -811,6 +872,7 @@ export function AdminChatInterface({
     if (!selectedAgentId) return;
     if (typeof window !== "undefined")
       sessionStorage.setItem("admin-chat-new-chat", "1");
+    setDismissedChatError(true);
     setCurrentConvId(null);
     setMessages([]);
     setHistorySheetOpen(false);
@@ -848,7 +910,7 @@ export function AdminChatInterface({
         const res = await updateConversationTitle(id, trimmed);
         if (!res.success) return;
         setConversations((prev) =>
-          prev.map((c) => (c.id === id ? { ...c, title: trimmed } : c))
+          prev.map((c) => (c.id === id ? { ...c, title: trimmed } : c)),
         );
       }
       setRenameTarget(null);
@@ -883,22 +945,20 @@ export function AdminChatInterface({
       const firstMsg = messages[0];
       const title =
         firstMsg != null ? getTextFromMessage(firstMsg) : "New chat";
-      updateConversationMessages(currentConvId, messages, title).then(
-        (res) => {
-          if (!res.success) return;
-          setConversations((prev) =>
-            prev.map((c) =>
-              c.id === currentConvId
-                ? {
-                    ...c,
-                    title,
-                    updatedAt: new Date().toISOString(),
-                  }
-                : c
-            )
-          );
-        }
-      );
+      updateConversationMessages(currentConvId, messages, title).then((res) => {
+        if (!res.success) return;
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === currentConvId
+              ? {
+                  ...c,
+                  title,
+                  updatedAt: new Date().toISOString(),
+                }
+              : c,
+          ),
+        );
+      });
     }, 800);
     return () => {
       if (saveTimeoutRef.current) {
@@ -983,7 +1043,8 @@ export function AdminChatInterface({
     const text = payload.text?.trim() ?? "";
     const files = payload.files ?? [];
     const hasContent = text.length > 0 || files.length > 0;
-    if (!hasContent || !agent.host || status !== "ready") return;
+    if (!hasContent || (!isProxyMode && !agent.host) || status !== "ready")
+      return;
 
     const parts: Array<
       | { type: "text"; text: string }
@@ -1007,7 +1068,7 @@ export function AdminChatInterface({
   };
 
   const isLoading = status === "submitted" || status === "streaming";
-  const canSend = status === "ready" && !!agent.host;
+  const canSend = status === "ready" && (isProxyMode || !!agent.host);
 
   const filteredConversations = conversations.filter((c) => {
     if (!searchQuery.trim()) return true;
@@ -1224,6 +1285,53 @@ export function AdminChatInterface({
     () => messages.filter((m: UIMessage) => m.role !== "system"),
     [messages],
   );
+  const chatErrorMessage = useMemo(() => {
+    if (status !== "error") return null;
+    if (!isProxyMode) return "เกิดข้อผิดพลาดในการตอบกลับ กรุณาลองใหม่อีกครั้ง";
+
+    const detail =
+      proxyError instanceof Error ? proxyError.message.toLowerCase() : "";
+    if (
+      detail.includes("rate_limit") ||
+      detail.includes("request too large") ||
+      detail.includes("too large for model") ||
+      detail.includes("tokens per minute")
+    ) {
+      return "คำขอนี้ยาวเกินขีดจำกัดชั่วคราวของโมเดล กรุณาลดความยาวข้อความหรือเริ่มแชทใหม่";
+    }
+
+    return "ไม่สามารถเชื่อมต่อบริการได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง";
+  }, [status, isProxyMode, proxyError]);
+  const pendingAssistantResponse = useMemo(() => {
+    if (!isLoading) return false;
+
+    let lastUserIndex = -1;
+    let lastAssistantIndex = -1;
+
+    for (let i = visibleMessages.length - 1; i >= 0; i--) {
+      const message = visibleMessages[i];
+      if (!message) continue;
+
+      if (lastUserIndex < 0 && message.role === "user") {
+        lastUserIndex = i;
+      }
+
+      if (lastAssistantIndex < 0 && message.role === "assistant") {
+        const hasText = getFullTextFromMessage(message).trim().length > 0;
+        const hasRenderablePart = (message.parts ?? []).some(
+          (part) => part.type !== "text" && part.type !== "step-start",
+        );
+        if (hasText || hasRenderablePart) {
+          lastAssistantIndex = i;
+        }
+      }
+
+      if (lastUserIndex >= 0 && lastAssistantIndex >= 0) break;
+    }
+
+    if (lastUserIndex < 0) return true;
+    return lastAssistantIndex < lastUserIndex;
+  }, [isLoading, visibleMessages]);
 
   return (
     <div className="relative flex size-full flex-col overflow-hidden">
@@ -1772,12 +1880,14 @@ export function AdminChatInterface({
               </Message>
             ))
           )}
-          {status === "submitted" && (
+          {pendingAssistantResponse && (
             <Message from="assistant">
               <MessageContent>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <span className="inline-block size-2 animate-pulse rounded-full bg-current" />
-                  <span className="text-sm">Connecting...</span>
+                  <span className="text-sm">
+                    {status === "submitted" ? "Connecting..." : "Thinking..."}
+                  </span>
                 </div>
               </MessageContent>
             </Message>
@@ -1787,9 +1897,50 @@ export function AdminChatInterface({
       </Conversation>
 
       <div className="sticky bottom-0 z-10 shrink-0 border-t bg-background p-4">
+        {chatErrorMessage && !dismissedChatError && (
+          <Alert
+            variant="destructive"
+            appearance="light"
+            size="sm"
+            className="mb-3 rounded-lg"
+          >
+            <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <span>{chatErrorMessage}</span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDismissedChatError(false);
+                    const msgs = messages as UIMessage[];
+                    const lastUser = [...msgs]
+                      .reverse()
+                      .find((m: UIMessage) => m.role === "user");
+                    if (!lastUser) return;
+                    const textToResend =
+                      getFullTextFromMessage(lastUser).trim();
+                    if (!textToResend) return;
+                    sendMessage({
+                      role: "user",
+                      parts: [{ type: "text", text: textToResend }],
+                    } as unknown as Parameters<typeof sendMessage>[0]);
+                  }}
+                >
+                  ลองใหม่
+                </Button>
+                <Button variant="primary" size="sm" onClick={handleNewChat}>
+                  New chat
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
         <PromptInput
           className="rounded-2xl"
-          onSubmit={handleSubmit}
+          onSubmit={(payload) => {
+            setDismissedChatError(false);
+            handleSubmit(payload);
+          }}
           multiple
           accept="image/*,.pdf,.txt,.md,.json,.csv"
           maxFiles={5}

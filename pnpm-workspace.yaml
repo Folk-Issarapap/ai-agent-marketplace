@@ -3,3 +3,5 @@ packages:
   - "packages/*"
   # Exclude merchant app temporarily (used only as reference)
   - "!apps/merchant"
+  # Exclude legacy reference app (requires unavailable workspace packages)
+  - "!apps/web_boat"
