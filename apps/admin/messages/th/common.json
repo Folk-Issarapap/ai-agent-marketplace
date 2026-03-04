@@ -1,0 +1,8 @@
+{
+  "common": {
+    "welcome": "ยินดีต้อนรับสู่ AI Agent Admin",
+    "signIn": "เข้าสู่ระบบ",
+    "signOut": "ออกจากระบบ",
+    "loading": "กำลังโหลด..."
+  }
+}

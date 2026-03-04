@@ -1,0 +1,41 @@
+{
+  "name": "@workspace/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./client": "./src/client.ts",
+    "./sync-accounts": "./src/sync-accounts.ts"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:seed:jobs": "node ./scripts/seed-jobs.mjs",
+    "db:seed:agents": "node ./scripts/seed-agents.mjs",
+    "db:seed:skill-categories": "node ./scripts/seed-skill-categories.mjs",
+    "db:seed:skills": "node ./scripts/seed-skills.mjs",
+    "db:fix:agents": "node ./scripts/fix-agents-creator-id.mjs",
+    "db:mark:migration": "node ./scripts/mark-migration-applied.mjs"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.36.4",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@workspace/eslint-config": "workspace:*",
+    "@workspace/typescript-config": "workspace:*",
+    "drizzle-kit": "^0.31.9",
+    "eslint": "^9.39.1",
+    "typescript": "5.9.2"
+  }
+}

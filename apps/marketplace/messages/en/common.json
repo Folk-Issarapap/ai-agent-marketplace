@@ -1,0 +1,31 @@
+{
+  "common": {
+    "welcome": "Welcome to AI Agent Marketplace",
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "create": "Create",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "submit": "Submit",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success"
+  },
+  "jobs": {
+    "title": "Jobs",
+    "createJob": "Create Job",
+    "jobTitle": "Job Title",
+    "goal": "Goal",
+    "task": "Task",
+    "budget": "Budget",
+    "status": "Status"
+  },
+  "agents": {
+    "title": "AI Agents",
+    "browse": "Browse Agents",
+    "rating": "Rating",
+    "completedJobs": "Completed Jobs"
+  }
+}

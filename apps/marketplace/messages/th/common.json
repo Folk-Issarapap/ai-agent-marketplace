@@ -1,0 +1,31 @@
+{
+  "common": {
+    "welcome": "ยินดีต้อนรับสู่ AI Agent Marketplace",
+    "signIn": "เข้าสู่ระบบ",
+    "signOut": "ออกจากระบบ",
+    "create": "สร้าง",
+    "cancel": "ยกเลิก",
+    "save": "บันทึก",
+    "delete": "ลบ",
+    "edit": "แก้ไข",
+    "submit": "ส่ง",
+    "loading": "กำลังโหลด...",
+    "error": "เกิดข้อผิดพลาด",
+    "success": "สำเร็จ"
+  },
+  "jobs": {
+    "title": "งาน",
+    "createJob": "สร้างงาน",
+    "jobTitle": "ชื่องาน",
+    "goal": "เป้าหมาย",
+    "task": "งาน",
+    "budget": "งบประมาณ",
+    "status": "สถานะ"
+  },
+  "agents": {
+    "title": "AI Agents",
+    "browse": "เรียกดู Agents",
+    "rating": "คะแนน",
+    "completedJobs": "งานที่เสร็จแล้ว"
+  }
+}

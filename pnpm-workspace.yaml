@@ -1,3 +1,5 @@
 packages:
   - "apps/*"
   - "packages/*"
+  # Exclude merchant app temporarily (used only as reference)
+  - "!apps/merchant"

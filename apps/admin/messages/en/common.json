@@ -1,0 +1,8 @@
+{
+  "common": {
+    "welcome": "Welcome to AI Agent Admin",
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "loading": "Loading..."
+  }
+}
