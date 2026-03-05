@@ -1,7 +1,7 @@
-import { studyPlanTool } from '../tool/study/study-plan-tool';
-import { pomodoroTool } from '../tool/study/pomodoro-tool';
-import { groq } from '@ai-sdk/groq';
-import { ToolLoopAgent, InferAgentUIMessage } from 'ai';
+import { studyPlanTool } from "../tool/study/study-plan-tool";
+import { pomodoroTool } from "../tool/study/pomodoro-tool";
+import { groq } from "@ai-sdk/groq";
+import { ToolLoopAgent, InferAgentUIMessage } from "ai";
 
 const STUDY_INSTRUCTIONS = `You are a Study Coach / Tutor (โค้ชการเรียน) who can speak Thai and English.
 
@@ -21,12 +21,12 @@ const STUDY_INSTRUCTIONS = `You are a Study Coach / Tutor (โค้ชการ
 - If the user is stressed, acknowledge their feelings and keep the tone supportive.`;
 
 export const studyAgent = new ToolLoopAgent({
-  model: groq('qwen/qwen3-32b'),
+  model: groq("qwen/qwen3-32b"),
   instructions: STUDY_INSTRUCTIONS,
   tools: {
     studyPlan: studyPlanTool,
-    pomodoro: pomodoroTool
-  }
+    pomodoro: pomodoroTool,
+  },
 });
 
 export type StudyAgentUIMessage = InferAgentUIMessage<typeof studyAgent>;

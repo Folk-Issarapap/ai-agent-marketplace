@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 export const progressionTool = tool({
   description: 'Get advice on when and how to progress in training: add weight, add reps, or change difficulty. Use when user asks "เมื่อไหร่ควรเพิ่มน้ำหนัก", "เพิ่ม reps ไหม", "โปรเกรสยังไง", or shares current sets/reps/weight.',
+  needsApproval: true,
   inputSchema: z.object({
     currentReps: z.coerce.number().min(1).max(50).optional().describe('Current reps per set'),
     currentSets: z.coerce.number().min(1).max(10).optional().describe('Current number of sets'),

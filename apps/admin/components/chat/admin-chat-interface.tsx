@@ -4,6 +4,7 @@ import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { useAgent } from "agents/react";
 import {
   DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
   lastAssistantMessageIsCompleteWithToolCalls,
   type UIMessage,
 } from "ai";
@@ -18,7 +19,6 @@ import {
   Pencil,
   Download,
   Search,
-  Paperclip,
   Copy,
   RotateCw,
   ChevronsUpDown,
@@ -29,8 +29,6 @@ import {
   Music2Icon,
   AlertCircle,
   Lightbulb,
-  Mic,
-  Square,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -74,7 +72,10 @@ import {
   PromptInputActionMenu,
   PromptInputActionMenuContent,
   PromptInputActionMenuTrigger,
+  PromptInputBody,
+  PromptInputButton,
   PromptInputFooter,
+  PromptInputHeader,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
@@ -124,6 +125,13 @@ import {
 } from "@workspace/ui/components/dialog";
 import { Input } from "@workspace/ui/components/input";
 import { Alert, AlertDescription } from "@workspace/ui/components/alert";
+import { Suggestion } from "@/components/ai-elements/suggestion";
+import { SpeechInput } from "@/components/ai-elements/speech-input";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "@/components/ai-elements/reasoning";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   createConversation,
@@ -151,10 +159,7 @@ function InputAttachmentStrip() {
   const attachments = usePromptInputAttachments();
   if (attachments.files.length === 0) return null;
   return (
-    <Attachments
-      variant="inline"
-      className="flex-wrap gap-1.5 border-b px-3 py-2"
-    >
+    <Attachments variant="inline">
       {attachments.files.map((file) => (
         <Attachment
           key={file.id}
@@ -168,6 +173,16 @@ function InputAttachmentStrip() {
       ))}
     </Attachments>
   );
+}
+
+function SuggestionItem({
+  suggestion,
+  onClick,
+}: {
+  suggestion: string;
+  onClick: (suggestion: string) => void;
+}) {
+  return <Suggestion suggestion={suggestion} onClick={() => onClick(suggestion)} />;
 }
 
 export type ChatAgentItem = {
@@ -648,13 +663,6 @@ export function AdminChatInterface({
   const [dismissedChatError, setDismissedChatError] = useState(false);
   const [guideOpen, setGuideOpen] = useState(true);
   const [draftText, setDraftText] = useState("");
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<{
-    start: () => void;
-    stop: () => void;
-    onresult: ((event: unknown) => void) | null;
-    onend: (() => void) | null;
-  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -763,7 +771,7 @@ export function AdminChatInterface({
         ? `/api/agents/${selectedAgentId}/chat`
         : "/api/agents/unknown/chat",
     }),
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
 
   const messages = (isProxyMode ? proxyMessages : agentMessages) as UIMessage[];
@@ -1085,71 +1093,6 @@ export function AdminChatInterface({
     >[0]);
     setDraftText("");
   };
-  const handleToggleListening = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const w = window as typeof window & {
-      SpeechRecognition?: new () => {
-        lang: string;
-        interimResults: boolean;
-        maxAlternatives: number;
-        start: () => void;
-        stop: () => void;
-        onresult: ((event: unknown) => void) | null;
-        onend: (() => void) | null;
-      };
-      webkitSpeechRecognition?: new () => {
-        lang: string;
-        interimResults: boolean;
-        maxAlternatives: number;
-        start: () => void;
-        stop: () => void;
-        onresult: ((event: unknown) => void) | null;
-        onend: (() => void) | null;
-      };
-    };
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
-
-    const SpeechRecognitionCtor =
-      w.SpeechRecognition ?? w.webkitSpeechRecognition;
-    if (!SpeechRecognitionCtor) return;
-
-    if (!recognitionRef.current) {
-      const recognition = new SpeechRecognitionCtor();
-      recognition.lang = "th-TH";
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-      recognition.onresult = (event: unknown) => {
-        const transcript = (
-          event as {
-            results?: ArrayLike<ArrayLike<{ transcript?: string }>>;
-          }
-        ).results?.[0]?.[0]?.transcript;
-        if (!transcript) return;
-        setDraftText((prev) =>
-          prev.trim().length > 0
-            ? `${prev.trim()} ${transcript.trim()}`
-            : transcript.trim(),
-        );
-      };
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-      recognitionRef.current = recognition;
-    }
-
-    setIsListening(true);
-    recognitionRef.current.start();
-  }, [isListening]);
-
-  useEffect(() => {
-    return () => {
-      recognitionRef.current?.stop();
-    };
-  }, []);
   const handleSuggestionClick = useCallback(
     (suggestion: string) => {
       if (!suggestion.trim() || status !== "ready") return;
@@ -2081,12 +2024,10 @@ export function AdminChatInterface({
           {pendingAssistantResponse && (
             <Message from="assistant">
               <MessageContent>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="inline-block size-2 animate-pulse rounded-full bg-current" />
-                  <span className="text-sm">
-                    {status === "submitted" ? "Connecting..." : "Thinking..."}
-                  </span>
-                </div>
+                <Reasoning className="w-full" isStreaming>
+                  <ReasoningTrigger />
+                  <ReasoningContent>{""}</ReasoningContent>
+                </Reasoning>
               </MessageContent>
             </Message>
           )}
@@ -2094,202 +2035,206 @@ export function AdminChatInterface({
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="sticky bottom-0 z-10 shrink-0 border-t bg-background p-4">
-        {chatErrorMessage && !dismissedChatError && (
-          <Alert
-            variant="destructive"
-            appearance="light"
-            size="sm"
-            className="mb-3 rounded-lg"
-          >
-            <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <span>{chatErrorMessage}</span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setDismissedChatError(false);
-                    const msgs = messages as UIMessage[];
-                    const lastUser = [...msgs]
-                      .reverse()
-                      .find((m: UIMessage) => m.role === "user");
-                    if (!lastUser) return;
-                    const textToResend =
-                      getFullTextFromMessage(lastUser).trim();
-                    if (!textToResend) return;
-                    sendMessage({
-                      role: "user",
-                      parts: [{ type: "text", text: textToResend }],
-                    } as unknown as Parameters<typeof sendMessage>[0]);
-                  }}
-                >
-                  ลองใหม่
-                </Button>
-                <Button variant="primary" size="sm" onClick={handleNewChat}>
-                  New chat
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-        <div className="mb-3 rounded-lg border bg-muted/20 p-2">
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/50"
-            onClick={() => setGuideOpen((prev) => !prev)}
-            aria-expanded={guideOpen}
-          >
-            <Lightbulb className="size-4 text-amber-500" />
-            <span className="font-medium text-foreground">Tips for best results</span>
-            <ChevronDown
-              className={cn(
-                "ml-auto size-4 transition-transform",
-                guideOpen && "rotate-180",
-              )}
-            />
-          </button>
-          {guideOpen && (
-            <ul className="mt-2 list-inside list-disc space-y-1 px-2 text-sm text-muted-foreground">
-              {guideContent.tips.map((tip) => (
-                <li key={tip}>{tip}</li>
-              ))}
-            </ul>
+      <div className="sticky bottom-0 z-10 shrink-0 border-t bg-background">
+        <div className="px-4 pb-4 pt-3">
+          {chatErrorMessage && !dismissedChatError && (
+            <Alert
+              variant="destructive"
+              appearance="light"
+              size="sm"
+              className="mb-3 rounded-lg"
+            >
+              <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span>{chatErrorMessage}</span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setDismissedChatError(false);
+                      const msgs = messages as UIMessage[];
+                      const lastUser = [...msgs]
+                        .reverse()
+                        .find((m: UIMessage) => m.role === "user");
+                      if (!lastUser) return;
+                      const textToResend =
+                        getFullTextFromMessage(lastUser).trim();
+                      if (!textToResend) return;
+                      sendMessage({
+                        role: "user",
+                        parts: [{ type: "text", text: textToResend }],
+                      } as unknown as Parameters<typeof sendMessage>[0]);
+                    }}
+                  >
+                    ลองใหม่
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={handleNewChat}>
+                    New chat
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
           )}
-          <div className="mt-2 flex flex-wrap gap-2 px-1 pb-1">
+        </div>
+        <div className="grid shrink-0 gap-4 pb-4">
+          <div className="px-4">
+            <button
+              type="button"
+              onClick={() => setGuideOpen((o) => !o)}
+              className="flex w-full items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-left text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              aria-expanded={guideOpen}
+            >
+              <Lightbulb className="size-4 shrink-0 text-amber-500" />
+              <span>Tips for best results</span>
+              <ChevronDown
+                className={cn(
+                  "ml-auto size-4 shrink-0 text-zinc-400 transition-transform",
+                  guideOpen && "rotate-180",
+                )}
+              />
+            </button>
+            {guideOpen && (
+              <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900/80">
+                <ul className="list-inside list-disc space-y-1 text-zinc-600 dark:text-zinc-400">
+                  {guideContent.tips.map((tip) => (
+                    <li key={tip}>{tip}</li>
+                  ))}
+                </ul>
+                <p className="mt-2 font-medium text-zinc-700 dark:text-zinc-300">
+                  Example questions
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 px-4">
             {guideContent.suggestions.map((suggestion) => (
-              <Button
+              <SuggestionItem
                 key={suggestion}
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 rounded-full text-xs"
-                disabled={!canSend}
-                onClick={() => handleSuggestionClick(suggestion)}
-              >
-                {suggestion}
-              </Button>
+                suggestion={suggestion}
+                onClick={handleSuggestionClick}
+              />
             ))}
           </div>
+          <div className="w-full px-4">
+            <PromptInput
+              globalDrop
+              multiple
+              accept="image/*,.pdf,.txt,.md,.json,.csv"
+              maxFiles={5}
+              maxFileSize={10 * 1024 * 1024}
+              onSubmit={(payload) => {
+                setDismissedChatError(false);
+                handleSubmit(payload);
+              }}
+            >
+              <PromptInputHeader>
+                <InputAttachmentStrip />
+              </PromptInputHeader>
+              <PromptInputBody>
+                <PromptInputTextarea
+                  placeholder="Type a question or task..."
+                  value={draftText}
+                  onChange={(e) => setDraftText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                      e.preventDefault();
+                      const form = e.currentTarget.form;
+                      const submitBtn = form?.querySelector(
+                        'button[type="submit"]',
+                      ) as HTMLButtonElement | null;
+                      if (!submitBtn?.disabled) form?.requestSubmit();
+                    }
+                  }}
+                />
+              </PromptInputBody>
+              <PromptInputFooter>
+                <PromptInputTools>
+                  <PromptInputActionMenu>
+                    <PromptInputActionMenuTrigger />
+                    <PromptInputActionMenuContent>
+                      <PromptInputActionAddAttachments label="แนบรูปหรือไฟล์" />
+                    </PromptInputActionMenuContent>
+                  </PromptInputActionMenu>
+                  <ModelSelector open={selectorOpen} onOpenChange={setSelectorOpen}>
+                    <ModelSelectorTrigger className="flex h-9 w-auto min-w-[140px] px-3">
+                      <span className="truncate">
+                        {chatAgents.find((a) => a.id === selectedAgentId)?.name ??
+                          "เลือก Agent"}
+                      </span>
+                      <ChevronsUpDown className="ml-1.5 size-3.5 shrink-0 opacity-50" />
+                    </ModelSelectorTrigger>
+                    <ModelSelectorContent title="เลือก Agent">
+                      <ModelSelectorInput />
+                      <ModelSelectorList>
+                        <ModelSelectorEmpty />
+                        <ModelSelectorGroup>
+                          {chatAgents.map((a) => {
+                            const isSelected = a.id === selectedAgentId;
+                            return (
+                              <ModelSelectorItem
+                                key={a.id}
+                                value={`${a.name} ${a.id} ${a.description ?? ""}`}
+                                onSelect={() => {
+                                  onAgentChange?.(a.id);
+                                  setSelectorOpen(false);
+                                }}
+                              >
+                                <div className="flex min-w-0 flex-col">
+                                  <span>{a.name}</span>
+                                  {a.description && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {a.description}
+                                    </span>
+                                  )}
+                                  {isSelected && (
+                                    <span className="text-[10px] text-primary">
+                                      Selected
+                                    </span>
+                                  )}
+                                </div>
+                              </ModelSelectorItem>
+                            );
+                          })}
+                        </ModelSelectorGroup>
+                      </ModelSelectorList>
+                      {onManageSheetOpenChange && (
+                        <div className="border-t p-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start gap-2"
+                            onClick={() => {
+                              setSelectorOpen(false);
+                              onManageSheetOpenChange(true);
+                            }}
+                          >
+                            <Settings2 className="size-4" />
+                            จัดการ Agents
+                          </Button>
+                        </div>
+                      )}
+                    </ModelSelectorContent>
+                  </ModelSelector>
+                  <SpeechInput
+                    className="shrink-0"
+                    size="icon"
+                    variant="ghost"
+                    onTranscriptionChange={(transcript) =>
+                      setDraftText((prev) =>
+                        prev ? `${prev} ${transcript}` : transcript,
+                      )
+                    }
+                  />
+                </PromptInputTools>
+                <PromptInputSubmit
+                  disabled={!canSend}
+                  status={status === "streaming" ? "streaming" : undefined}
+                  variant="primary"
+                />
+              </PromptInputFooter>
+            </PromptInput>
+          </div>
         </div>
-        <PromptInput
-          className="rounded-2xl"
-          onSubmit={(payload) => {
-            setDismissedChatError(false);
-            handleSubmit(payload);
-          }}
-          multiple
-          accept="image/*,.pdf,.txt,.md,.json,.csv"
-          maxFiles={5}
-          maxFileSize={10 * 1024 * 1024}
-        >
-          <PromptInputTextarea
-            className="min-h-20 px-4 py-3 text-base"
-            placeholder="Type a question or task... (⌘↵ to send)"
-            value={draftText}
-            onChange={(e) => setDraftText(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                e.preventDefault();
-                const form = e.currentTarget.form;
-                const submitBtn = form?.querySelector(
-                  'button[type="submit"]',
-                ) as HTMLButtonElement | null;
-                if (!submitBtn?.disabled) form?.requestSubmit();
-              }
-            }}
-          />
-          <InputAttachmentStrip />
-          <PromptInputFooter className="justify-between gap-2 p-2">
-            <PromptInputTools className="gap-1">
-              <PromptInputActionMenu>
-                <PromptInputActionMenuTrigger
-                  tooltip="แนบไฟล์"
-                  className="shrink-0"
-                >
-                  <Paperclip className="size-4" />
-                </PromptInputActionMenuTrigger>
-                <PromptInputActionMenuContent>
-                  <PromptInputActionAddAttachments label="แนบรูปหรือไฟล์" />
-                </PromptInputActionMenuContent>
-              </PromptInputActionMenu>
-              <ModelSelector open={selectorOpen} onOpenChange={setSelectorOpen}>
-                <ModelSelectorTrigger className="h-9 w-auto min-w-[140px] px-3">
-                  <span className="truncate">
-                    {chatAgents.find((a) => a.id === selectedAgentId)?.name ??
-                      "เลือก Agent"}
-                  </span>
-                  <ChevronsUpDown className="ml-1.5 size-3.5 shrink-0 opacity-50" />
-                </ModelSelectorTrigger>
-                <ModelSelectorContent title="เลือก Agent">
-                  <ModelSelectorInput />
-                  <ModelSelectorList>
-                    <ModelSelectorEmpty />
-                    <ModelSelectorGroup>
-                      {chatAgents.map((a) => (
-                        <ModelSelectorItem
-                          key={a.id}
-                          selected={a.id === selectedAgentId}
-                          value={`${a.name} ${a.id} ${a.description ?? ""}`}
-                          onSelect={() => {
-                            onAgentChange?.(a.id);
-                            setSelectorOpen(false);
-                          }}
-                        >
-                          <div className="flex min-w-0 flex-col">
-                            <span>{a.name}</span>
-                            {a.description && (
-                              <span className="text-xs text-muted-foreground">
-                                {a.description}
-                              </span>
-                            )}
-                          </div>
-                        </ModelSelectorItem>
-                      ))}
-                    </ModelSelectorGroup>
-                  </ModelSelectorList>
-                  {onManageSheetOpenChange && (
-                    <div className="border-t p-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full justify-start gap-2"
-                        onClick={() => {
-                          setSelectorOpen(false);
-                          onManageSheetOpenChange(true);
-                        }}
-                      >
-                        <Settings2 className="size-4" />
-                        จัดการ Agents
-                      </Button>
-                    </div>
-                  )}
-                </ModelSelectorContent>
-              </ModelSelector>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-9"
-                onClick={handleToggleListening}
-                title={
-                  isListening ? "หยุดบันทึกเสียง" : "เริ่มพิมพ์ด้วยเสียง"
-                }
-              >
-                {isListening ? (
-                  <Square className="size-4 text-red-500" />
-                ) : (
-                  <Mic className="size-4" />
-                )}
-              </Button>
-            </PromptInputTools>
-            <PromptInputSubmit
-              disabled={!canSend}
-              status={status === "streaming" ? "streaming" : undefined}
-              variant="primary"
-            />
-          </PromptInputFooter>
-        </PromptInput>
       </div>
     </div>
   );

@@ -30,6 +30,7 @@ function normalize(s: string): string {
 
 export const exerciseInfoTool = tool({
   description: 'Get detailed exercise information: correct form, muscles used, equipment, and alternative exercises. Use when user asks how to do an exercise, form tips, or which muscles it targets.',
+  needsApproval: true,
   inputSchema: z.object({
     query: z.string().describe('Exercise name in English or Thai (e.g. squat, สควอต, push-up, แพลงก์)'),
   }),

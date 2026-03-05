@@ -7,6 +7,7 @@ type BudgetLevel = (typeof budgetLevels)[number];
 export const travelPlanTool = tool({
   description:
     'Generate a simple per-day structure for a trip (morning/afternoon/evening focus) based on destination type, days, and budget level. Does not use real-time data.',
+  needsApproval: true,
   inputSchema: z.object({
     destination: z.string().min(1).describe('City or region name, e.g. "Bangkok", "Chiang Mai", "Tokyo"'),
     days: z.coerce.number().min(1).max(30).describe('Number of full days at the destination'),

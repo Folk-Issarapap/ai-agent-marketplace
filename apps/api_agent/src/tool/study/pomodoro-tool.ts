@@ -4,6 +4,7 @@ import { z } from 'zod';
 export const pomodoroTool = tool({
   description:
     'Split a study session into Pomodoro-style focus blocks with short and long breaks. Useful when the user wants a concrete timing schedule.',
+  needsApproval: true,
   inputSchema: z.object({
     totalMinutes: z
       .coerce.number()

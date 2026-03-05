@@ -80,6 +80,7 @@ async function fetchWeather(
 export const weatherTool = tool({
   description:
     'Get current weather and optional multi-day forecast for a city or location. Use this whenever the user asks about weather, temperature, rain, or forecast in a place. Call with the location name (e.g. Bangkok, Tokyo, London).',
+  needsApproval: true,
   inputSchema: z.object({
     location: z.string().min(1).describe('City or place name (e.g. Bangkok, Chiang Mai, Tokyo)'),
     unit: z.enum(['celsius', 'fahrenheit']).optional().describe('Temperature unit; default celsius'),
@@ -88,7 +89,6 @@ export const weatherTool = tool({
   async *execute({ location, unit = 'celsius', forecastDays = 3 }) {
     log('Execute — location:', location, 'unit:', unit, 'forecastDays:', forecastDays);
     yield { state: 'loading' as const };
-
     const geo = await geocode(location);
     if (!geo) {
       log('Geocode not found for:', location);

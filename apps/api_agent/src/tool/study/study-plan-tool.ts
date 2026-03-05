@@ -4,6 +4,7 @@ import { z } from 'zod';
 export const studyPlanTool = tool({
   description:
     'Create a high-level weekly study plan by splitting total hours across topics and weeks until the target exam or goal date.',
+  needsApproval: true,
   inputSchema: z.object({
     subject: z.string().min(1).describe('Main subject or exam, e.g. "TOEIC", "Calculus 1", "Frontend development"'),
     topics: z

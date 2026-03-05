@@ -1,8 +1,8 @@
-import { budgetTool } from '../tool/finance/budget-tool';
-import { savingsGoalTool } from '../tool/finance/savings-goal-tool';
-import { loanCalculatorTool } from '../tool/finance/loan-calculator-tool';
-import { groq } from '@ai-sdk/groq';
-import { ToolLoopAgent, InferAgentUIMessage } from 'ai';
+import { budgetTool } from "../tool/finance/budget-tool";
+import { savingsGoalTool } from "../tool/finance/savings-goal-tool";
+import { loanCalculatorTool } from "../tool/finance/loan-calculator-tool";
+import { groq } from "@ai-sdk/groq";
+import { ToolLoopAgent, InferAgentUIMessage, stepCountIs } from "ai";
 
 const FINANCE_INSTRUCTIONS = `You are a Personal Finance Advisor (ที่ปรึกษาการเงินส่วนบุคคล) who can speak Thai and English.
 
@@ -23,13 +23,14 @@ const FINANCE_INSTRUCTIONS = `You are a Personal Finance Advisor (ที่ป�
 - If the user asks about investing in specific assets, say you can give general principles only and suggest talking to a licensed advisor for specifics.`;
 
 export const financeAgent = new ToolLoopAgent({
-  model: groq('qwen/qwen3-32b'),
+  model: groq("qwen/qwen3-32b"),
   instructions: FINANCE_INSTRUCTIONS,
   tools: {
     budget: budgetTool,
     savingsGoal: savingsGoalTool,
-    loanCalculator: loanCalculatorTool
-  }
+    loanCalculator: loanCalculatorTool,
+  },
+  stopWhen: stepCountIs(5),
 });
 
 export type FinanceAgentUIMessage = InferAgentUIMessage<typeof financeAgent>;

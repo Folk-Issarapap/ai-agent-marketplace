@@ -18,6 +18,7 @@ const ACTIVITY_MULT: Record<string, number> = {
 
 export const bodyMetricsTool = tool({
   description: 'Calculate BMI, BMR (Basal Metabolic Rate), and estimated daily calorie needs (TDEE) for a person. Use when user provides weight, height, age, gender, or asks about calories, BMI, metabolism.',
+  needsApproval: true,
   inputSchema: z.object({
     weightKg: z.coerce.number().min(20).max(300).describe('Body weight in kilograms'),
     heightCm: z.coerce.number().min(100).max(250).describe('Height in centimeters'),

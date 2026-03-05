@@ -1,6 +1,6 @@
-import { weatherTool } from '../tool/weather/weather-tool';
-import { groq } from '@ai-sdk/groq';
-import { ToolLoopAgent, InferAgentUIMessage } from 'ai';
+import { weatherTool } from "../tool/weather/weather-tool";
+import { groq } from "@ai-sdk/groq";
+import { ToolLoopAgent, InferAgentUIMessage } from "ai";
 
 const WEATHER_AGENT_INSTRUCTIONS = `You are a Weather Assistant. You give accurate, concise weather information and practical advice.
 
@@ -22,7 +22,7 @@ const WEATHER_AGENT_INSTRUCTIONS = `You are a Weather Assistant. You give accura
 - Keep replies focused. Do not repeat the same numbers in long paragraphs.`;
 
 export const weatherAgent = new ToolLoopAgent({
-  model: groq('qwen/qwen3-32b'),
+  model: groq("qwen/qwen3-32b"),
   instructions: WEATHER_AGENT_INSTRUCTIONS,
   tools: {
     weather: weatherTool,

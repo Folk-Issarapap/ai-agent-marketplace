@@ -1,7 +1,7 @@
-import { travelPlanTool } from '../tool/travel/travel-plan-tool';
-import { packingListTool } from '../tool/travel/packing-list-tool';
-import { groq } from '@ai-sdk/groq';
-import { ToolLoopAgent, InferAgentUIMessage } from 'ai';
+import { travelPlanTool } from "../tool/travel/travel-plan-tool";
+import { packingListTool } from "../tool/travel/packing-list-tool";
+import { groq } from "@ai-sdk/groq";
+import { ToolLoopAgent, InferAgentUIMessage } from "ai";
 
 const TRAVEL_INSTRUCTIONS = `You are a Travel Planner Assistant (ผู้ช่วยวางแผนท่องเที่ยว) who can speak Thai and English.
 
@@ -20,12 +20,12 @@ const TRAVEL_INSTRUCTIONS = `You are a Travel Planner Assistant (ผู้ช่
 - Add common-sense tips for weather, comfort, and local etiquette, but do not claim real-time information.`;
 
 export const travelAgent = new ToolLoopAgent({
-  model: groq('qwen/qwen3-32b'),
+  model: groq("qwen/qwen3-32b"),
   instructions: TRAVEL_INSTRUCTIONS,
   tools: {
     travelPlan: travelPlanTool,
-    packingList: packingListTool
-  }
+    packingList: packingListTool,
+  },
 });
 
 export type TravelAgentUIMessage = InferAgentUIMessage<typeof travelAgent>;

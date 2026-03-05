@@ -6,6 +6,7 @@ const LEVEL_OPTIONS = ['beginner', 'intermediate', 'advanced'] as const;
 
 export const workoutPlanTool = tool({
   description: 'Generate a structured workout plan for the day or session. Use when user wants a workout routine, plan, or session based on goal, level, duration, and focus (e.g. strength, cardio, HIIT).',
+  needsApproval: true,
   inputSchema: z.object({
     focus: z.enum(FOCUS_OPTIONS).describe('Primary focus of the workout'),
     level: z.enum(LEVEL_OPTIONS).describe('Fitness level of the user'),

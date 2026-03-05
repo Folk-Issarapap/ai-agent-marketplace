@@ -4,6 +4,7 @@ import { z } from 'zod';
 export const budgetTool = tool({
   description:
     'Split monthly net income into categories (needs, wants, savings/debt) using a rule like 50/30/20, and summarize the result. Use when user asks how to divide their money each month.',
+  needsApproval: true,
   inputSchema: z.object({
     netIncome: z.coerce.number().min(0).describe('Monthly net income after tax in the user currency'),
     needsPercent: z

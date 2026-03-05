@@ -14,6 +14,7 @@ function calcMonthlyPayment(principal: number, annualRatePercent: number, months
 export const loanCalculatorTool = tool({
   description:
     'Given principal, annual interest rate, and term in months, calculate approximate monthly payment and total interest for an amortized loan.',
+  needsApproval: true,
   inputSchema: z.object({
     principal: z.coerce.number().min(0).describe('Loan principal amount in the user currency'),
     annualRatePercent: z

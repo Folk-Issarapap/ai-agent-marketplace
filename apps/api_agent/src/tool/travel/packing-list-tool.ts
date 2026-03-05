@@ -4,6 +4,7 @@ import { z } from 'zod';
 export const packingListTool = tool({
   description:
     'Generate a structured packing list (clothing, documents, electronics, health, extras) based on trip length, climate, and activities. Does not access real-time weather.',
+  needsApproval: true,
   inputSchema: z.object({
     days: z.coerce.number().min(1).max(60).describe('Number of days of the trip'),
     climate: z.enum(['hot', 'mild', 'cold', 'variable']).describe('Expected general climate at the destination'),

@@ -1,9 +1,9 @@
-import { bodyMetricsTool } from '../tool/fitness/body-metrics-tool';
-import { workoutPlanTool } from '../tool/fitness/workout-plan-tool';
-import { exerciseInfoTool } from '../tool/fitness/exercise-info-tool';
-import { progressionTool } from '../tool/fitness/progression-tool';
-import { groq } from '@ai-sdk/groq';
-import { ToolLoopAgent, InferAgentUIMessage } from 'ai';
+import { bodyMetricsTool } from "../tool/fitness/body-metrics-tool";
+import { workoutPlanTool } from "../tool/fitness/workout-plan-tool";
+import { exerciseInfoTool } from "../tool/fitness/exercise-info-tool";
+import { progressionTool } from "../tool/fitness/progression-tool";
+import { groq } from "@ai-sdk/groq";
+import { ToolLoopAgent, InferAgentUIMessage } from "ai";
 
 const COACH_INSTRUCTIONS = `You are a professional, friendly Fitness Coach (โค้ชฟิตเนส). You support users in Thai and English.
 
@@ -26,7 +26,7 @@ const COACH_INSTRUCTIONS = `You are a professional, friendly Fitness Coach (โ�
 - You may respond in Thai, English, or mix (ภาษาไทย/English) depending on how the user writes.`;
 
 export const fitnessAgent = new ToolLoopAgent({
-  model: groq('openai/gpt-oss-safeguard-20b'),
+  model: groq("openai/gpt-oss-safeguard-20b"),
   instructions: COACH_INSTRUCTIONS,
   tools: {
     bodyMetrics: bodyMetricsTool,
